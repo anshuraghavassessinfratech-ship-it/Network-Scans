@@ -1,0 +1,48 @@
+{
+  "name": "exam-center-network-scanner",
+  "version": "2.0.0",
+  "description": "Enterprise-grade network scanner for Exam Center Audit System - Detects active PCs with MAC address detection, vendor lookup, offline mode, and comprehensive logging",
+  "main": "scanner.js",
+  "bin": {
+    "network-scanner": "scanner.js"
+  },
+  "scripts": {
+    "start": "node scanner.js",
+    "build:exe": "pkg scanner.js --targets node18-win-x64 --output dist/network-scanner.exe --compress",
+    "build:exe-node20": "pkg scanner.js --targets node20-win-x64 --output dist/network-scanner-node20.exe --compress",
+    "build:exe-debug": "pkg scanner.js --targets node18-win-x64 --output dist/network-scanner-debug.exe",
+    "build:all": "npm run build:exe && npm run build:exe-node20",
+    "build:legacy": "pkg scanner.js --targets node18-win-x64 --output dist/network-scanner-win.exe && pkg scanner.js --targets node18-macos-x64 --output dist/network-scanner-macos && pkg scanner.js --targets node18-linux-x64 --output dist/network-scanner-linux"
+  },
+  "pkg": {
+    "scripts": [
+      "scanner.js"
+    ],
+    "assets": [
+      "package.json"
+    ],
+    "targets": [
+      "node18-win-x64",
+      "node20-win-x64"
+    ],
+    "outputPath": "dist",
+    "compress": true,
+    "bytecode": false
+  },
+  "keywords": [
+    "network-scanner",
+    "lan-scanner",
+    "exam-center",
+    "audit",
+    "pc-detection",
+    "mac-address",
+    "vendor-lookup",
+    "offline-sync"
+  ],
+  "author": "Exam Center Audit System",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+"type": "commonjs"
+}

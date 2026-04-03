@@ -1,0 +1,19 @@
+{
+  "description": "Network Scanner Configuration Template",
+  "pingTimeout": 300,
+  "pingConcurrency": 100,
+  "portScanConcurrency": 50,
+  "portScanTimeout": 200,
+  "scanRangeStart": 1,
+  "scanRangeEnd": 254,
+  "apiRetryAttempts": 3,
+  "apiRetryDelay": 2000,
+  "apiTimeout": 30000,
+  "maxRetries": 3,
+  "enableMetrics": true,
+  "enableHistory": true,
+  "windowsPorts": [135, 139, 445, 3389],
+  "linuxPorts": [22],
+  "printerPorts": [9100, 515, 631],
+  "routerPorts": [23, 80, 443, 8080]
+}
