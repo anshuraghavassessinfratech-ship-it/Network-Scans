@@ -37,26 +37,15 @@ interface NetworkScanRecord extends NetworkScanData {
 export async function POST(request: NextRequest) {
   try {
     console.log("🔍 Network scan API called")
-    const authHeader = request.headers.get("authorization")
-    console.log("Authorization header present:", !!authHeader)
     
-    // Validate auth header format
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.log("❌ Missing or invalid Bearer token")
-      return NextResponse.json(
-        { success: false, error: "Missing or invalid authorization header" },
-        { status: 401 }
-      )
-    }
-
     let user
     try {
       user = await requireApiAuth(request)
       console.log("✅ Authenticated user:", user.username)
     } catch (authError) {
-      console.error("❌ Auth error:", authError)
+      console.error("❌ Auth error:", authError.message)
       return NextResponse.json(
-        { success: false, error: "Authentication failed" },
+        { success: false, error: authError.message },
         { status: 401 }
       )
     }

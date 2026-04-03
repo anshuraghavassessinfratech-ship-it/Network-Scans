@@ -4,7 +4,17 @@ import bcrypt from "bcryptjs"
 import { getDb } from "./mongodb"
 import type { User } from "./types"
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "default-secret-change-me")
+const JWT_SECRET_KEY = process.env.JWT_SECRET
+const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_KEY || "default-secret-change-me")
+
+// Validate JWT secret at runtime
+function validateJwtSecret() {
+  if (!JWT_SECRET_KEY || JWT_SECRET_KEY === "your-very-secure-jwt-secret-key-change-this-in-production") {
+    if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
+      throw new Error("JWT_SECRET environment variable must be set to a secure value in production")
+    }
+  }
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12)
@@ -15,6 +25,7 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 }
 
 export async function createToken(user: Omit<User, "password">): Promise<string> {
+  validateJwtSecret()
   return new SignJWT({
     userId: user._id?.toString(),
     username: user.username,
@@ -28,6 +39,7 @@ export async function createToken(user: Omit<User, "password">): Promise<string>
 }
 
 export async function verifyToken(token: string) {
+  validateJwtSecret()
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
     return payload as {
@@ -65,36 +77,72 @@ export async function requireAuth(allowedRoles?: ("admin" | "auditor")[]) {
 }
 
 export async function requireApiAuth(request: Request, allowedRoles?: ("admin" | "auditor")[]) {
-  const authHeader = request.headers.get("authorization")
-  
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("Unauthorized")
-  }
-  
-  const token = authHeader.substring(7) // Remove "Bearer " prefix
-  
-  // Dev bypass token for local testing (do not use in production).
-  const devToken = process.env.API_DEV_TOKEN || "dev-scan-token"
-  if (process.env.NODE_ENV !== "production" && token === devToken) {
-    return {
-      userId: "dev",
-      username: "dev",
-      role: "admin",
-      name: "Development Scanner",
+  try {
+    const authHeader = request.headers.get("authorization")
+
+    // Log header presence for debugging
+    console.log("🔐 Auth header present:", !!authHeader)
+    if (authHeader) {
+      console.log("🔐 Auth header starts with Bearer:", authHeader.startsWith("Bearer "))
     }
+
+    if (!authHeader) {
+      console.log("❌ No authorization header provided")
+      throw new Error("Missing authorization header")
+    }
+
+    if (!authHeader.startsWith("Bearer ")) {
+      console.log("❌ Invalid authorization header format:", authHeader.substring(0, 20) + "...")
+      throw new Error("Invalid authorization header format. Expected 'Bearer <token>'")
+    }
+
+    const token = authHeader.substring(7).trim() // Remove "Bearer " prefix and trim whitespace
+
+    if (!token) {
+      console.log("❌ Empty token after Bearer prefix")
+      throw new Error("Empty token provided")
+    }
+
+    console.log("🔐 Token extracted, length:", token.length)
+
+    // Dev bypass token for local testing (only in development)
+    const devToken = process.env.API_DEV_TOKEN || "dev-scan-token"
+    const isDev = process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV === "development"
+
+    if (isDev && token === devToken) {
+      console.log("✅ Using dev bypass token")
+      return {
+        userId: "dev",
+        username: "dev",
+        role: "admin",
+        name: "Development Scanner",
+      }
+    }
+
+    // Verify JWT token
+    console.log("🔐 Verifying JWT token...")
+    const user = await verifyToken(token)
+
+    if (!user) {
+      console.log("❌ JWT verification failed - invalid token")
+      throw new Error("Invalid or expired token")
+    }
+
+    console.log("✅ JWT verified for user:", user.username, "role:", user.role)
+
+    // Check role permissions if specified
+    if (allowedRoles && !allowedRoles.includes(user.role)) {
+      console.log("❌ Insufficient permissions. User role:", user.role, "Required:", allowedRoles)
+      throw new Error("Insufficient permissions")
+    }
+
+    return user
+
+  } catch (error) {
+    console.error("❌ requireApiAuth failed:", error.message)
+    // Re-throw with the specific error message
+    throw error
   }
-  
-  const user = await verifyToken(token)
-  
-  if (!user) {
-    throw new Error("Unauthorized")
-  }
-  
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    throw new Error("Forbidden")
-  }
-  
-  return user
 }
 
 export async function initializeDefaultAdmin() {
