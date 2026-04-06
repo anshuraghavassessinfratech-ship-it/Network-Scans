@@ -77,72 +77,63 @@ export async function requireAuth(allowedRoles?: ("admin" | "auditor")[]) {
 }
 
 export async function requireApiAuth(request: Request, allowedRoles?: ("admin" | "auditor")[]) {
-  try {
-    const authHeader = request.headers.get("authorization")
+  const authHeader = request.headers.get("authorization")
+  console.log("🔐 Auth header present:", !!authHeader)
 
-    // Log header presence for debugging
-    console.log("🔐 Auth header present:", !!authHeader)
-    if (authHeader) {
-      console.log("🔐 Auth header starts with Bearer:", authHeader.startsWith("Bearer "))
+  if (!authHeader) {
+    console.log("❌ No authorization header provided")
+    throw new Error("Missing authorization header")
+  }
+
+  if (!authHeader.startsWith("Bearer ")) {
+    console.log("❌ Invalid authorization header format:", authHeader.substring(0, 20) + "...")
+    throw new Error("Invalid authorization format")
+  }
+
+  const token = authHeader.substring(7).trim()
+  if (!token) {
+    console.log("❌ Empty token after Bearer prefix")
+    throw new Error("Missing authorization header")
+  }
+
+  console.log("🔐 Incoming token:", token.slice(0, 10) + "...")
+
+  const SCANNER_API_TOKEN = process.env.SCANNER_API_TOKEN
+  const isStaticScannerToken = Boolean(SCANNER_API_TOKEN && token === SCANNER_API_TOKEN)
+  console.log("🔐 Using static scanner token:", isStaticScannerToken)
+
+  if (isStaticScannerToken) {
+    const scannerUser = {
+      userId: "scanner",
+      username: "scanner-device",
+      role: "admin",
+      name: "Scanner Device",
     }
 
-    if (!authHeader) {
-      console.log("❌ No authorization header provided")
-      throw new Error("Missing authorization header")
-    }
-
-    if (!authHeader.startsWith("Bearer ")) {
-      console.log("❌ Invalid authorization header format:", authHeader.substring(0, 20) + "...")
-      throw new Error("Invalid authorization header format. Expected 'Bearer <token>'")
-    }
-
-    const token = authHeader.substring(7).trim() // Remove "Bearer " prefix and trim whitespace
-
-    if (!token) {
-      console.log("❌ Empty token after Bearer prefix")
-      throw new Error("Empty token provided")
-    }
-
-    console.log("🔐 Token extracted, length:", token.length)
-
-    // Dev bypass token for local testing (only in development)
-    const devToken = process.env.API_DEV_TOKEN || "dev-scan-token"
-    const isDev = process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV === "development"
-
-    if (isDev && token === devToken) {
-      console.log("✅ Using dev bypass token")
-      return {
-        userId: "dev",
-        username: "dev",
-        role: "admin",
-        name: "Development Scanner",
-      }
-    }
-
-    // Verify JWT token
-    console.log("🔐 Verifying JWT token...")
-    const user = await verifyToken(token)
-
-    if (!user) {
-      console.log("❌ JWT verification failed - invalid token")
-      throw new Error("Invalid or expired token")
-    }
-
-    console.log("✅ JWT verified for user:", user.username, "role:", user.role)
-
-    // Check role permissions if specified
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
-      console.log("❌ Insufficient permissions. User role:", user.role, "Required:", allowedRoles)
+    if (allowedRoles && !allowedRoles.includes(scannerUser.role)) {
+      console.log("❌ Scanner token does not have required role:", scannerUser.role)
       throw new Error("Insufficient permissions")
     }
 
-    return user
-
-  } catch (error) {
-    console.error("❌ requireApiAuth failed:", error.message)
-    // Re-throw with the specific error message
-    throw error
+    return scannerUser
   }
+
+  console.log("🔐 Falling back to JWT verification")
+  const user = await verifyToken(token)
+
+  if (!user) {
+    console.log("❌ JWT verification failed - invalid or expired token")
+    throw new Error("Invalid or expired token")
+  }
+
+  console.log("✅ JWT verified for user:", user.username, "role:", user.role)
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    console.log("❌ Insufficient permissions. User role:", user.role, "Required:", allowedRoles)
+    throw new Error("Insufficient permissions")
+  }
+
+  return user
 }
 
 export async function initializeDefaultAdmin() {
